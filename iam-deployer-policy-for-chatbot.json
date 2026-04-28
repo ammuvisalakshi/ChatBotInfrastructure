@@ -1,0 +1,174 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormation",
+      "Effect": "Allow",
+      "Action": "cloudformation:*",
+      "Resource": [
+        "arn:aws:cloudformation:*:*:stack/TeamAlpha*",
+        "arn:aws:cloudformation:*:*:stack/CDKToolkit*"
+      ]
+    },
+    {
+      "Sid": "CloudFormationGlobal",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:ListStacks", "cloudformation:DescribeStackEvents",
+        "cloudformation:GetTemplate", "cloudformation:ValidateTemplate"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket", "s3:DeleteBucket", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy",
+        "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration", "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock", "s3:GetBucketLocation",
+        "s3:GetObject", "s3:PutObject", "s3:DeleteObject",
+        "s3:ListBucket", "s3:ListBucketVersions",
+        "s3:GetBucketVersioning", "s3:DeleteObjectVersion",
+        "s3:PutBucketWebsite", "s3:GetBucketWebsite",
+        "s3:PutBucketCORS", "s3:GetBucketCORS",
+        "s3:PutBucketTagging", "s3:GetEncryptionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::team-alpha-*",
+        "arn:aws:s3:::team-alpha-*/*"
+      ]
+    },
+    {
+      "Sid": "IAM",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole",
+        "iam:UpdateRole", "iam:TagRole", "iam:UntagRole",
+        "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
+        "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+        "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/TeamAlpha-*",
+        "arn:aws:iam::*:role/aws-service-role/*"
+      ]
+    },
+    {
+      "Sid": "VPC",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:DescribeVpcs", "ec2:ModifyVpcAttribute",
+        "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:DescribeSubnets",
+        "ec2:CreateInternetGateway", "ec2:DeleteInternetGateway",
+        "ec2:AttachInternetGateway", "ec2:DetachInternetGateway", "ec2:DescribeInternetGateways",
+        "ec2:CreateNatGateway", "ec2:DeleteNatGateway", "ec2:DescribeNatGateways",
+        "ec2:AllocateAddress", "ec2:ReleaseAddress", "ec2:DescribeAddresses",
+        "ec2:CreateRouteTable", "ec2:DeleteRouteTable", "ec2:DescribeRouteTables",
+        "ec2:CreateRoute", "ec2:DeleteRoute", "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable",
+        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:DescribeSecurityGroups",
+        "ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
+        "ec2:DescribeNetworkInterfaces", "ec2:CreateNetworkInterface", "ec2:DeleteNetworkInterface",
+        "ec2:DescribeAvailabilityZones", "ec2:DescribeAccountAttributes",
+        "ec2:CreateTags", "ec2:DeleteTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Aurora",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBCluster", "rds:DeleteDBCluster", "rds:DescribeDBClusters", "rds:ModifyDBCluster",
+        "rds:CreateDBInstance", "rds:DeleteDBInstance", "rds:DescribeDBInstances",
+        "rds:CreateDBSubnetGroup", "rds:DeleteDBSubnetGroup", "rds:DescribeDBSubnetGroups",
+        "rds:AddTagsToResource", "rds:RemoveTagsFromResource", "rds:ListTagsForResource",
+        "rds-data:ExecuteStatement", "rds-data:BatchExecuteStatement"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue", "secretsmanager:TagResource",
+        "secretsmanager:GetRandomPassword"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:*:secret:TeamAlpha-*"
+    },
+    {
+      "Sid": "Lambda",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration", "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration", "lambda:AddPermission",
+        "lambda:RemovePermission", "lambda:TagResource", "lambda:ListTags",
+        "lambda:InvokeFunction", "lambda:GetPolicy"
+      ],
+      "Resource": "arn:aws:lambda:*:*:function:TeamAlpha-*"
+    },
+    {
+      "Sid": "APIGateway",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET", "apigateway:POST", "apigateway:PUT",
+        "apigateway:DELETE", "apigateway:PATCH"
+      ],
+      "Resource": "arn:aws:apigateway:us-east-1::*"
+    },
+    {
+      "Sid": "CloudFront",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution", "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution", "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig", "cloudfront:TagResource",
+        "cloudfront:CreateOriginAccessControl", "cloudfront:GetOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl", "cloudfront:ListDistributions",
+        "cloudfront:CreateCloudFrontOriginAccessIdentity",
+        "cloudfront:GetCloudFrontOriginAccessIdentity",
+        "cloudfront:DeleteCloudFrontOriginAccessIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BedrockAgentKBGuardrails",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:CreateKnowledgeBase", "bedrock:DeleteKnowledgeBase",
+        "bedrock:GetKnowledgeBase", "bedrock:UpdateKnowledgeBase",
+        "bedrock:CreateDataSource", "bedrock:DeleteDataSource",
+        "bedrock:GetDataSource", "bedrock:UpdateDataSource",
+        "bedrock:StartIngestionJob", "bedrock:GetIngestionJob", "bedrock:ListIngestionJobs",
+        "bedrock:CreateAgent", "bedrock:DeleteAgent",
+        "bedrock:GetAgent", "bedrock:UpdateAgent", "bedrock:PrepareAgent",
+        "bedrock:CreateAgentAlias", "bedrock:DeleteAgentAlias",
+        "bedrock:GetAgentAlias", "bedrock:UpdateAgentAlias",
+        "bedrock:AssociateAgentKnowledgeBase", "bedrock:DisassociateAgentKnowledgeBase",
+        "bedrock:CreateGuardrail", "bedrock:DeleteGuardrail",
+        "bedrock:GetGuardrail", "bedrock:UpdateGuardrail",
+        "bedrock:CreateGuardrailVersion",
+        "bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream",
+        "bedrock:InvokeAgent", "bedrock:Retrieve", "bedrock:RetrieveAndGenerate",
+        "bedrock:ApplyGuardrail",
+        "bedrock:ListFoundationModels", "bedrock:GetFoundationModel",
+        "bedrock:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LogsSTS",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups",
+        "logs:PutRetentionPolicy", "logs:CreateLogStream", "logs:PutLogEvents", "logs:TagResource",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

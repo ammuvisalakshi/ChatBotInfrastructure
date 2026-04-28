@@ -1,0 +1,4 @@
+deployment-outputs.txt
+*.zip
+.env
+.claude/

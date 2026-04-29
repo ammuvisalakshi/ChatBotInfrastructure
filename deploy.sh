@@ -149,9 +149,24 @@ aws rds-data execute-statement \
 echo -e "${G}  pgvector extension enabled${NC}"
 
 # -------------------------------------------
-# Step 7: Deploy frontend
+# Step 7: Update Lambda function code
 # -------------------------------------------
-echo -e "${Y}[7/7] Deploying frontend...${NC}"
+echo -e "${Y}[7/9] Updating Lambda function code...${NC}"
+
+aws lambda update-function-code --function-name "TeamAlpha-query-${ENVIRONMENT}" \
+  --s3-bucket "${DOCS_BUCKET}" --s3-key lambda/query.zip \
+  --region "$REGION" --output text --query "LastUpdateStatus" 2>/dev/null || true
+echo -e "${G}  Query Lambda updated${NC}"
+
+aws lambda update-function-code --function-name "TeamAlpha-upload-${ENVIRONMENT}" \
+  --s3-bucket "${DOCS_BUCKET}" --s3-key lambda/upload.zip \
+  --region "$REGION" --output text --query "LastUpdateStatus" 2>/dev/null || true
+echo -e "${G}  Upload Lambda updated${NC}"
+
+# -------------------------------------------
+# Step 8: Deploy frontend
+# -------------------------------------------
+echo -e "${Y}[8/9] Deploying frontend...${NC}"
 
 TEMP_HTML=$(mktemp /tmp/index-XXXX.html)
 sed "s|%%API_URL%%|${API_URL}|g" "$APP_CODE_PATH/frontend/index.html" > "$TEMP_HTML"
@@ -160,6 +175,22 @@ aws s3 cp "$TEMP_HTML" "s3://${FRONTEND_BUCKET}/index.html" \
 rm -f "$TEMP_HTML"
 
 echo -e "${G}  Frontend deployed${NC}"
+
+# -------------------------------------------
+# Step 9: Invalidate CloudFront cache
+# -------------------------------------------
+echo -e "${Y}[9/9] Invalidating CloudFront cache...${NC}"
+
+DIST_ID=$(aws cloudfront list-distributions --region "$REGION" \
+  --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, '${FRONTEND_BUCKET}')].Id" --output text 2>/dev/null)
+
+if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
+  MSYS_NO_PATHCONV=1 aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+    --paths "/*" --region "$REGION" --output text --query "Invalidation.Status" 2>/dev/null || echo "  Skipped (no permission)"
+  echo -e "${G}  CloudFront cache invalidated${NC}"
+else
+  echo "  Skipped (distribution not found)"
+fi
 
 # -------------------------------------------
 # Done!

@@ -143,28 +143,9 @@
       "Resource": "*"
     },
     {
-      "Sid": "BedrockAgentKBGuardrails",
+      "Sid": "Bedrock",
       "Effect": "Allow",
-      "Action": [
-        "bedrock:CreateKnowledgeBase", "bedrock:DeleteKnowledgeBase",
-        "bedrock:GetKnowledgeBase", "bedrock:UpdateKnowledgeBase",
-        "bedrock:CreateDataSource", "bedrock:DeleteDataSource",
-        "bedrock:GetDataSource", "bedrock:UpdateDataSource",
-        "bedrock:StartIngestionJob", "bedrock:GetIngestionJob", "bedrock:ListIngestionJobs",
-        "bedrock:CreateAgent", "bedrock:DeleteAgent",
-        "bedrock:GetAgent", "bedrock:UpdateAgent", "bedrock:PrepareAgent",
-        "bedrock:CreateAgentAlias", "bedrock:DeleteAgentAlias",
-        "bedrock:GetAgentAlias", "bedrock:UpdateAgentAlias",
-        "bedrock:AssociateAgentKnowledgeBase", "bedrock:DisassociateAgentKnowledgeBase",
-        "bedrock:CreateGuardrail", "bedrock:DeleteGuardrail",
-        "bedrock:GetGuardrail", "bedrock:UpdateGuardrail",
-        "bedrock:CreateGuardrailVersion",
-        "bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream",
-        "bedrock:InvokeAgent", "bedrock:Retrieve", "bedrock:RetrieveAndGenerate",
-        "bedrock:ApplyGuardrail",
-        "bedrock:ListFoundationModels", "bedrock:GetFoundationModel",
-        "bedrock:TagResource"
-      ],
+      "Action": "bedrock:*",
       "Resource": "*"
     },
     {

@@ -179,7 +179,7 @@ Resources:
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-vector-cluster
       Engine: aurora-postgresql
-      EngineVersion: '15.4'
+      EngineVersion: '15.8'
       MasterUsername: !Sub '{{resolve:secretsmanager:${AuroraSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${AuroraSecret}:SecretString:password}}'
       DatabaseName: vectordb
@@ -243,6 +243,7 @@ Resources:
                 Action:
                   - rds-data:ExecuteStatement
                   - rds-data:BatchExecuteStatement
+                  - rds:DescribeDBClusters
                 Resource: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}
               - Sid: SecretsAccess
                 Effect: Allow

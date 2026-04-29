@@ -83,7 +83,7 @@
         "rds:CreateDBCluster", "rds:DeleteDBCluster", "rds:DescribeDBClusters", "rds:ModifyDBCluster",
         "rds:CreateDBInstance", "rds:DeleteDBInstance", "rds:DescribeDBInstances",
         "rds:CreateDBSubnetGroup", "rds:DeleteDBSubnetGroup", "rds:DescribeDBSubnetGroups",
-        "rds:AddTagsToResource", "rds:RemoveTagsFromResource", "rds:ListTagsForResource",
+        "rds:AddTagsToResource", "rds:RemoveTagsFromResource", "rds:ListTagsForResource", "rds:DescribeDBEngineVersions",
         "rds-data:ExecuteStatement", "rds-data:BatchExecuteStatement"
       ],
       "Resource": "*"

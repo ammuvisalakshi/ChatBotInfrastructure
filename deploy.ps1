@@ -3,20 +3,32 @@
 # Prerequisites:
 #   - AWS CLI configured with TeamAlpha-Chatbot-Deployer-Policy attached
 #   - Bedrock model access enabled in console (Claude Sonnet + Titan Embeddings v2)
+#
+# Usage:
+#   .\deploy.ps1 -Profile chatbot-deployer
 
 param(
     [string]$Environment = "dev",
     [string]$Region = "us-east-1",
     [string]$StackName = "TeamAlpha-chatbot",
-    [string]$AppCodePath = "..\TeamAlphaChatbot"
+    [string]$AppCodePath = "..\TeamAlphaChatbot",
+    [string]$Profile = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Helper: run aws CLI with optional --profile
+function awscli {
+    $cmd = "aws $($args -join ' ') --region $Region"
+    if ($Profile) { $cmd += " --profile $Profile" }
+    Invoke-Expression $cmd
+}
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host " Team Alpha Chatbot - Deployment" -ForegroundColor Cyan
 Write-Host " Environment: $Environment" -ForegroundColor Cyan
 Write-Host " Region: $Region" -ForegroundColor Cyan
+if ($Profile) { Write-Host " Profile: $Profile" -ForegroundColor Cyan }
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -24,7 +36,7 @@ Write-Host ""
 # Step 1: Get AWS Account ID
 # -------------------------------------------
 Write-Host "[1/7] Getting AWS account info..." -ForegroundColor Yellow
-$AccountId = (aws sts get-caller-identity --query Account --output text --region $Region)
+$AccountId = (awscli sts get-caller-identity --query Account --output text)
 Write-Host "  Account: $AccountId" -ForegroundColor Green
 
 $DocsBucket = "team-alpha-docs-$AccountId"
@@ -34,12 +46,13 @@ $FrontendBucket = "team-alpha-frontend-$AccountId"
 # Step 2: Create docs bucket if needed (for Lambda code upload)
 # -------------------------------------------
 Write-Host "[2/7] Ensuring docs bucket exists..." -ForegroundColor Yellow
-$bucketExists = aws s3api head-bucket --bucket $DocsBucket --region $Region 2>&1
+$bucketExists = awscli s3api head-bucket --bucket $DocsBucket 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  Creating bucket: $DocsBucket" -ForegroundColor Gray
-    aws s3api create-bucket --bucket $DocsBucket --region $Region 2>$null
-    if ($Region -ne "us-east-1") {
-        aws s3api create-bucket --bucket $DocsBucket --region $Region --create-bucket-configuration LocationConstraint=$Region
+    if ($Region -eq "us-east-1") {
+        awscli s3api create-bucket --bucket $DocsBucket 2>$null
+    } else {
+        awscli s3api create-bucket --bucket $DocsBucket --create-bucket-configuration LocationConstraint=$Region
     }
 }
 Write-Host "  Docs bucket ready" -ForegroundColor Green
@@ -54,7 +67,7 @@ $queryDir = "$AppCodePath\backend\query"
 $queryZip = "$env:TEMP\query-lambda.zip"
 if (Test-Path $queryZip) { Remove-Item $queryZip }
 Compress-Archive -Path "$queryDir\lambda_function.py" -DestinationPath $queryZip
-aws s3 cp $queryZip "s3://$DocsBucket/lambda/query.zip" --region $Region
+awscli s3 cp $queryZip "s3://$DocsBucket/lambda/query.zip"
 Write-Host "  Query Lambda uploaded" -ForegroundColor Green
 
 # Upload Lambda
@@ -62,7 +75,7 @@ $uploadDir = "$AppCodePath\backend\upload"
 $uploadZip = "$env:TEMP\upload-lambda.zip"
 if (Test-Path $uploadZip) { Remove-Item $uploadZip }
 Compress-Archive -Path "$uploadDir\lambda_function.py" -DestinationPath $uploadZip
-aws s3 cp $uploadZip "s3://$DocsBucket/lambda/upload.zip" --region $Region
+awscli s3 cp $uploadZip "s3://$DocsBucket/lambda/upload.zip"
 Write-Host "  Upload Lambda uploaded" -ForegroundColor Green
 
 # -------------------------------------------
@@ -71,12 +84,11 @@ Write-Host "  Upload Lambda uploaded" -ForegroundColor Green
 Write-Host "[4/7] Deploying CloudFormation stack..." -ForegroundColor Yellow
 Write-Host "  This may take 15-20 minutes (Aurora cluster creation)..." -ForegroundColor Gray
 
-aws cloudformation deploy `
+awscli cloudformation deploy `
     --template-file template.yaml `
     --stack-name $StackName `
     --parameter-overrides "Environment=$Environment" `
     --capabilities CAPABILITY_NAMED_IAM `
-    --region $Region `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -ne 0) {
@@ -91,10 +103,9 @@ Write-Host "  Stack deployed successfully" -ForegroundColor Green
 # -------------------------------------------
 Write-Host "[5/7] Getting stack outputs..." -ForegroundColor Yellow
 
-$ApiURL = (aws cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='ApiURL'].OutputValue" --output text --region $Region)
-$CloudFrontURL = (aws cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='CloudFrontURL'].OutputValue" --output text --region $Region)
-$KBId = (aws cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='KnowledgeBaseId'].OutputValue" --output text --region $Region)
-$AuroraCluster = (aws cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='AgentId'].OutputValue" --output text --region $Region)
+$ApiURL = (awscli cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='ApiURL'].OutputValue" --output text)
+$CloudFrontURL = (awscli cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='CloudFrontURL'].OutputValue" --output text)
+$KBId = (awscli cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].Outputs[?OutputKey=='KnowledgeBaseId'].OutputValue" --output text)
 
 Write-Host "  API URL: $ApiURL" -ForegroundColor Green
 Write-Host "  CloudFront URL: $CloudFrontURL" -ForegroundColor Green
@@ -104,15 +115,14 @@ Write-Host "  CloudFront URL: $CloudFrontURL" -ForegroundColor Green
 # -------------------------------------------
 Write-Host "[6/7] Initializing pgvector extension in Aurora..." -ForegroundColor Yellow
 
-$ClusterArn = (aws rds describe-db-clusters --db-cluster-identifier "TeamAlpha-vector-cluster" --query "DBClusters[0].DBClusterArn" --output text --region $Region)
-$SecretArn = (aws secretsmanager describe-secret --secret-id "TeamAlpha-aurora-$Environment" --query "ARN" --output text --region $Region)
+$ClusterArn = (awscli rds describe-db-clusters --db-cluster-identifier "TeamAlpha-vector-cluster" --query "DBClusters[0].DBClusterArn" --output text)
+$SecretArn = (awscli secretsmanager describe-secret --secret-id "TeamAlpha-aurora-$Environment" --query "ARN" --output text)
 
-aws rds-data execute-statement `
+awscli rds-data execute-statement `
     --resource-arn $ClusterArn `
     --secret-arn $SecretArn `
     --database vectordb `
-    --sql "CREATE EXTENSION IF NOT EXISTS vector;" `
-    --region $Region 2>$null
+    --sql "CREATE EXTENSION IF NOT EXISTS vector;" 2>$null
 
 Write-Host "  pgvector extension enabled" -ForegroundColor Green
 
@@ -129,7 +139,7 @@ $htmlContent = Get-Content "$frontendDir\index.html" -Raw
 $htmlContent = $htmlContent -replace '%%API_URL%%', $ApiURL
 $htmlContent | Out-File -FilePath $tempHtml -Encoding UTF8
 
-aws s3 cp $tempHtml "s3://$FrontendBucket/index.html" --content-type "text/html" --region $Region
+awscli s3 cp $tempHtml "s3://$FrontendBucket/index.html" --content-type "text/html"
 Write-Host "  Frontend deployed" -ForegroundColor Green
 
 # -------------------------------------------
@@ -158,6 +168,7 @@ Team Alpha Chatbot - Deployment Outputs
 Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Environment: $Environment
 Region: $Region
+Profile: $Profile
 
 CloudFront URL: $CloudFrontURL
 API URL: $ApiURL

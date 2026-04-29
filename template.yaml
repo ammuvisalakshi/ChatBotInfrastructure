@@ -435,6 +435,10 @@ Resources:
                 Action:
                   - bedrock:InvokeAgent
                 Resource: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/*/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${DocsBucketName}/*
 
   UploadFunctionRole:
     Type: AWS::IAM::Role
@@ -648,6 +652,145 @@ Resources:
           DOCS_BUCKET: !Ref DocsBucketName
           KNOWLEDGE_BASE_ID: !Ref TeamAlphaKB
           DATA_SOURCE_ID: !GetAtt KBS3DataSource.DataSourceId
+
+  # ============================================================
+  # S3 Event → Auto-sync KB on document upload
+  # ============================================================
+
+  SyncFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub TeamAlpha-sync-${Environment}
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt UploadFunctionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: !Ref TeamAlphaKB
+          DATA_SOURCE_ID: !GetAtt KBS3DataSource.DataSourceId
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          bedrock_agent = boto3.client('bedrock-agent', region_name='us-east-1')
+
+          def handler(event, context):
+              key = event['Records'][0]['s3']['object']['key']
+
+              # Only sync for documents, skip lambda zips
+              if not key.startswith('documents/'):
+                  print(f'Skipping non-document key: {key}')
+                  return
+
+              kb_id = os.environ['KNOWLEDGE_BASE_ID']
+              ds_id = os.environ['DATA_SOURCE_ID']
+
+              print(f'Document uploaded: {key}, triggering KB sync')
+              response = bedrock_agent.start_ingestion_job(
+                  knowledgeBaseId=kb_id,
+                  dataSourceId=ds_id
+              )
+              print(f'Ingestion job started: {response["ingestionJob"]["ingestionJobId"]}')
+
+  SyncFunctionS3Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SyncFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::${DocsBucketName}
+      SourceAccount: !Ref AWS::AccountId
+
+  # Custom resource to configure S3 notification on the pre-existing docs bucket
+  ConfigureS3NotificationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub TeamAlpha-S3Notification-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                  - s3:PutBucketNotificationConfiguration
+                  - s3:GetBucketNotification
+                  - s3:GetBucketNotificationConfiguration
+                Resource: !Sub arn:aws:s3:::${DocsBucketName}
+
+  ConfigureS3NotificationFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: SyncFunctionS3Permission
+    Properties:
+      FunctionName: !Sub TeamAlpha-s3notify-${Environment}
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ConfigureS3NotificationRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  # Remove notification on stack delete
+                  try:
+                      s3 = boto3.client('s3')
+                      s3.put_bucket_notification_configuration(
+                          Bucket=event['ResourceProperties']['BucketName'],
+                          NotificationConfiguration={}
+                      )
+                  except Exception:
+                      pass
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+
+              try:
+                  s3 = boto3.client('s3')
+                  s3.put_bucket_notification_configuration(
+                      Bucket=event['ResourceProperties']['BucketName'],
+                      NotificationConfiguration={
+                          'LambdaFunctionConfigurations': [
+                              {
+                                  'LambdaFunctionArn': event['ResourceProperties']['LambdaArn'],
+                                  'Events': ['s3:ObjectCreated:*'],
+                                  'Filter': {
+                                      'Key': {
+                                          'FilterRules': [
+                                              {'Name': 'prefix', 'Value': 'documents/'}
+                                          ]
+                                      }
+                                  }
+                              }
+                          ]
+                      }
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Notification configured'})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  ConfigureS3Notification:
+    Type: Custom::S3Notification
+    Properties:
+      ServiceToken: !GetAtt ConfigureS3NotificationFunction.Arn
+      BucketName: !Ref DocsBucketName
+      LambdaArn: !GetAtt SyncFunction.Arn
 
   # ============================================================
   # API Gateway

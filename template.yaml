@@ -176,6 +176,7 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-vector-cluster
       Engine: aurora-postgresql
@@ -191,6 +192,7 @@ Resources:
         MaxCapacity: !Ref AuroraMaxCapacity
       EnableHttpEndpoint: true
       StorageEncrypted: true
+      SkipFinalSnapshot: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName

@@ -94,10 +94,17 @@
       "Action": [
         "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret",
         "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue",
-        "secretsmanager:PutSecretValue", "secretsmanager:TagResource",
-        "secretsmanager:GetRandomPassword"
+        "secretsmanager:PutSecretValue", "secretsmanager:TagResource"
       ],
       "Resource": "arn:aws:secretsmanager:*:*:secret:TeamAlpha-*"
+    },
+    {
+      "Sid": "SecretsManagerGlobal",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetRandomPassword"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "Lambda",

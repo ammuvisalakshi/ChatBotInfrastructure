@@ -42,6 +42,10 @@ Parameters:
     Default: lambda/upload.zip
     Description: S3 key for upload Lambda deployment package
 
+  DocsBucketName:
+    Type: String
+    Description: Name of the pre-created S3 bucket for documents and Lambda code
+
 Resources:
 
   # ============================================================
@@ -115,25 +119,6 @@ Resources:
   # ============================================================
   # S3 Buckets
   # ============================================================
-
-  DocsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub team-alpha-docs-${AWS::AccountId}
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders: ['*']
-            AllowedMethods: [PUT, POST]
-            AllowedOrigins: ['*']
-            MaxAge: 3600
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
 
   FrontendBucket:
     Type: AWS::S3::Bucket
@@ -246,8 +231,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt DocsBucket.Arn
-                  - !Sub ${DocsBucket.Arn}/*
+                  - !Sub arn:aws:s3:::${DocsBucketName}
+                  - !Sub arn:aws:s3:::${DocsBucketName}/*
               - Sid: EmbeddingModel
                 Effect: Allow
                 Action:
@@ -344,12 +329,12 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub ${DocsBucket.Arn}/*
+                Resource: !Sub arn:aws:s3:::${DocsBucketName}/*
               - Sid: S3Presign
                 Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub ${DocsBucket.Arn}/*
+                Resource: !Sub arn:aws:s3:::${DocsBucketName}/*
               - Sid: KBSync
                 Effect: Allow
                 Action:
@@ -393,7 +378,7 @@ Resources:
       DataSourceConfiguration:
         Type: S3
         S3Configuration:
-          BucketArn: !GetAtt DocsBucket.Arn
+          BucketArn: !Sub arn:aws:s3:::${DocsBucketName}
       VectorIngestionConfiguration:
         ChunkingConfiguration:
           ChunkingStrategy: FIXED_SIZE
@@ -509,7 +494,7 @@ Resources:
       Timeout: 60
       MemorySize: 256
       Code:
-        S3Bucket: !Ref DocsBucket
+        S3Bucket: !Ref DocsBucketName
         S3Key: !Ref LambdaQueryS3Key
       Environment:
         Variables:
@@ -526,11 +511,11 @@ Resources:
       Timeout: 30
       MemorySize: 256
       Code:
-        S3Bucket: !Ref DocsBucket
+        S3Bucket: !Ref DocsBucketName
         S3Key: !Ref LambdaUploadS3Key
       Environment:
         Variables:
-          DOCS_BUCKET: !Ref DocsBucket
+          DOCS_BUCKET: !Ref DocsBucketName
           KNOWLEDGE_BASE_ID: !Ref TeamAlphaKB
           DATA_SOURCE_ID: !GetAtt KBS3DataSource.DataSourceId
 
@@ -716,7 +701,7 @@ Outputs:
 
   DocsBucketName:
     Description: S3 bucket for uploading documents
-    Value: !Ref DocsBucket
+    Value: !Ref DocsBucketName
 
   FrontendBucketName:
     Description: S3 bucket for frontend files

@@ -24,8 +24,8 @@ Parameters:
 
   BedrockModelId:
     Type: String
-    Default: anthropic.claude-sonnet-4-20250514-v1:0
-    Description: Foundation model for the Bedrock Agent
+    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+    Description: Inference profile for the Bedrock Agent
 
   EmbeddingModelArn:
     Type: String
@@ -192,7 +192,6 @@ Resources:
         MaxCapacity: !Ref AuroraMaxCapacity
       EnableHttpEndpoint: true
       StorageEncrypted: true
-      SkipFinalSnapshot: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -206,6 +205,131 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
+
+  # ============================================================
+  # Custom Resource — Initialize pgvector + table in Aurora
+  # ============================================================
+
+  InitDBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub TeamAlpha-InitDB-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RDSDataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                Resource: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref AuroraSecret
+
+  InitDBFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: AuroraInstance
+    Properties:
+      FunctionName: !Sub TeamAlpha-initdb-${Environment}
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt InitDBRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import time
+
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+
+              rds = boto3.client('rds-data')
+              cluster_arn = event['ResourceProperties']['ClusterArn']
+              secret_arn = event['ResourceProperties']['SecretArn']
+              database = event['ResourceProperties']['Database']
+              table_name = event['ResourceProperties']['TableName']
+
+              try:
+                  # Wait a moment for cluster to be fully ready
+                  time.sleep(10)
+
+                  # Enable pgvector extension
+                  rds.execute_statement(
+                      resourceArn=cluster_arn,
+                      secretArn=secret_arn,
+                      database=database,
+                      sql='CREATE EXTENSION IF NOT EXISTS vector;'
+                  )
+
+                  # Create the table for Bedrock KB
+                  rds.execute_statement(
+                      resourceArn=cluster_arn,
+                      secretArn=secret_arn,
+                      database=database,
+                      sql=f'''
+                          CREATE TABLE IF NOT EXISTS {table_name} (
+                              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                              embedding vector(1024),
+                              chunks TEXT,
+                              metadata JSON
+                          );
+                      '''
+                  )
+
+                  # Create index for vector search
+                  rds.execute_statement(
+                      resourceArn=cluster_arn,
+                      secretArn=secret_arn,
+                      database=database,
+                      sql=f'''
+                          CREATE INDEX IF NOT EXISTS {table_name}_embedding_idx
+                          ON {table_name}
+                          USING hnsw (embedding vector_cosine_ops);
+                      '''
+                  )
+
+                  # Create text search index on chunks (required by Bedrock)
+                  rds.execute_statement(
+                      resourceArn=cluster_arn,
+                      secretArn=secret_arn,
+                      database=database,
+                      sql=f'''
+                          CREATE INDEX IF NOT EXISTS {table_name}_chunks_idx
+                          ON {table_name}
+                          USING gin (to_tsvector('simple', chunks));
+                      '''
+                  )
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'DB initialized'})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  InitDB:
+    Type: Custom::InitDB
+    DependsOn: AuroraInstance
+    Properties:
+      ServiceToken: !GetAtt InitDBFunction.Arn
+      ClusterArn: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}
+      SecretArn: !Ref AuroraSecret
+      Database: vectordb
+      TableName: bedrock_kb
 
   # ============================================================
   # IAM Roles — Bedrock KB, Agent, Lambdas
@@ -274,7 +398,10 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
-                Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}
+                Resource:
+                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0
+                  - arn:aws:bedrock:us-east-1::foundation-model/*
               - Sid: RetrieveFromKB
                 Effect: Allow
                 Action:
@@ -352,7 +479,7 @@ Resources:
   TeamAlphaKB:
     Type: AWS::Bedrock::KnowledgeBase
     DependsOn:
-      - AuroraInstance
+      - InitDB
     Properties:
       Name: !Sub ${ProjectName}-kb-${Environment}
       RoleArn: !GetAtt BedrockKBRole.Arn

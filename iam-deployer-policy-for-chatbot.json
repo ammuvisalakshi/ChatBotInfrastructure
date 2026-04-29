@@ -48,7 +48,7 @@
         "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
         "iam:AttachRolePolicy", "iam:DetachRolePolicy",
         "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
-        "iam:CreateServiceLinkedRole"
+        "iam:CreateServiceLinkedRole", "iam:UpdateAssumeRolePolicy"
       ],
       "Resource": [
         "arn:aws:iam::*:role/TeamAlpha-*",
@@ -153,9 +153,19 @@
       "Sid": "LogsSTS",
       "Effect": "Allow",
       "Action": [
-        "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups",
+        "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups", "logs:DescribeLogStreams",
+        "logs:FilterLogEvents", "logs:GetLogEvents",
         "logs:PutRetentionPolicy", "logs:CreateLogStream", "logs:PutLogEvents", "logs:TagResource",
         "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Marketplace",
+      "Effect": "Allow",
+      "Action": [
+        "aws-marketplace:ViewSubscriptions",
+        "aws-marketplace:Subscribe"
       ],
       "Resource": "*"
     }
